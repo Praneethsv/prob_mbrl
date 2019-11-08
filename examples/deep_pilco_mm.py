@@ -6,56 +6,24 @@ import numpy as np
 import os
 import torch
 import tensorboardX
+import sys
 
 from functools import partial
+
+
+# TODO: Remove this hack
+if sys.stdin.isatty():
+    print("Appending the artisynth-rl path and prob_mbrl path to python path")
+    sys.path.append("/home/praneethsv/Pictures/artisynth-rl/src/python")
+    sys.path.append("/home/praneethsv/Pictures/prob_mbrl")
+
+import artisynth_envs
 from prob_mbrl import utils, models, algorithms, envs
+from prob_mbrl.utils.utilities import extend_args
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser("Deep-PILCO with moment matching")
-    parser.add_argument('-e', '--env', type=str, default="Cartpole")
-    parser.add_argument('-o',
-                        '--output_folder',
-                        type=str,
-                        default="~/.prob_mbrl/")
-    parser.add_argument('-s', '--seed', type=int, default=1)
-    parser.add_argument('--num_threads', type=int, default=1)
-    parser.add_argument('--n_initial_epi', type=int, default=0)
-    parser.add_argument('--load_from', type=str, default=None)
-    parser.add_argument('--pred_H', type=int, default=15)
-    parser.add_argument('--control_H', type=int, default=40)
-    parser.add_argument('--discount_factor', type=str, default=None)
-    parser.add_argument('--prioritized_replay', action='store_true')
-    parser.add_argument('--timesteps_to_sample',
-                        type=utils.load_csv,
-                        default=0)
-    parser.add_argument('--mm_groups', type=int, default=None)
-    parser.add_argument('--debug', action='store_true')
-
-    parser.add_argument('--dyn_lr', type=float, default=1e-4)
-    parser.add_argument('--dyn_opt_iters', type=int, default=2000)
-    parser.add_argument('--dyn_batch_size', type=int, default=100)
-    parser.add_argument('--dyn_drop_rate', type=float, default=0.1)
-    parser.add_argument('--dyn_components', type=int, default=1)
-    parser.add_argument('--dyn_shape', type=utils.load_csv, default=[200, 200])
-
-    parser.add_argument('--pol_lr', type=float, default=1e-3)
-    parser.add_argument('--pol_clip', type=float, default=1.0)
-    parser.add_argument('--pol_drop_rate', type=float, default=0.1)
-    parser.add_argument('--pol_opt_iters', type=int, default=1000)
-    parser.add_argument('--pol_batch_size', type=int, default=100)
-    parser.add_argument('--ps_iters', type=int, default=100)
-    parser.add_argument('--pol_shape', type=utils.load_csv, default=[200, 200])
-
-    parser.add_argument('--plot_level', type=int, default=0)
-    parser.add_argument('--render', action='store_true')
-    parser.add_argument('--use_cuda', action='store_true')
-    parser.add_argument('--learn_reward', action='store_true')
-    parser.add_argument('--keep_best', action='store_true')
-    parser.add_argument('--stop_when_done', action='store_true')
-    parser.add_argument('--expl_noise', type=float, default=0.0)
-
-    # parameters
-    args = parser.parse_args()
+    args = extend_args()
+    print('Arguments are: ', args)
     loaded_from = args.load_from
     if loaded_from is not None:
         args = torch.load(os.path.join(loaded_from, 'args.pth.tar'))
@@ -69,13 +37,14 @@ if __name__ == '__main__':
         env = envs.__dict__[args.env]()
     else:
         import gym
-        env = gym.make(args.env)
+
+        env = gym.make(args.env, **vars(args))
 
     env_name = env.spec.id if env.spec is not None else env.__class__.__name__
     output_folder = os.path.expanduser(args.output_folder)
 
     results_folder = os.path.join(
-        output_folder, "mc_pilco_mm", env_name,
+        output_folder, "deep_pilco_mm", env_name,
         datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S.%f"))
     try:
         os.makedirs(results_folder)
@@ -102,18 +71,20 @@ if __name__ == '__main__':
         if hasattr(env.spec, 'max_episode_steps'):
             args.control_H = env.spec.max_episode_steps
             args.stop_when_done = True
+    print(type(args.control_H), type(args.n_initial_epi), args.control_H)
     initial_experience = args.control_H * args.n_initial_epi
 
     # initialize discount factor
     if args.discount_factor is not None:
         if args.discount_factor == 'auto':
-            args.discount_factor = (1.0 / args.control_H)**(2.0 /
-                                                            args.control_H)
+            args.discount_factor = (1.0 / args.control_H) ** (2.0 /
+                                                              args.control_H)
         else:
             args.discount_factor = float(args.discount_factor)
 
     # initialize dynamics model
     dynE = 2 * (D + 1) if args.learn_reward else 2 * D
+
     if args.dyn_components > 1:
         output_density = models.GaussianMixtureDensity(dynE / 2,
                                                        args.dyn_components)
@@ -172,9 +143,11 @@ if __name__ == '__main__':
     writer = tensorboardX.SummaryWriter(
         logdir=os.path.join(results_folder, "logs"))
 
+
     # callbacks
     def on_close():
         writer.close()
+
 
     atexit.register(on_close)
 
@@ -194,7 +167,7 @@ if __name__ == '__main__':
 
     # policy learning loop
     expl_pol = lambda x, t: (  # noqa: E 731
-        pol(x) + args.expl_noise * rnd(x, t)).clip(minU, maxU)
+            pol(x) + args.expl_noise * rnd(x, t)).clip(minU, maxU)
     render_fn = (lambda *args, **kwargs: env.render()) if args.render else None
     for ps_it in range(args.ps_iters):
         # apply policy
@@ -224,7 +197,7 @@ if __name__ == '__main__':
                               prioritized_sampling=args.prioritized_replay,
                               summary_writer=writer,
                               summary_scope='model_learning/episode_%d' %
-                              ps_it)
+                                            ps_it)
         torch.save(dyn.state_dict(),
                    os.path.join(results_folder, 'latest_dynamics.pth.tar'))
 
@@ -236,10 +209,12 @@ if __name__ == '__main__':
         if args.plot_level > 0:
             utils.plot_rollout(x0[:25], dyn, pol, args.pred_H * 2)
 
+
         # train policy
         def on_iteration(i, loss, states, actions, rewards, discount):
             writer.add_scalar('mc_pilco/episode_%d/training loss' % ps_it,
                               loss, i)
+
 
         print("Policy search iteration %d" % (ps_it + 1))
         algorithms.mc_pilco(x0,
@@ -252,7 +227,7 @@ if __name__ == '__main__':
                             discount=args.discount_factor,
                             pegasus=True,
                             mm_states=True,
-                            mm_rewards=True,
+                            mm_rewards=False,
                             mm_groups=args.mm_groups,
                             maximize=True,
                             clip_grad=args.pol_clip,

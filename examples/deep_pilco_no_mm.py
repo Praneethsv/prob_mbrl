@@ -70,7 +70,7 @@ if __name__ == '__main__':
     else:
         import gym
         env = gym.make(args.env)
-
+    print("environment is ", args.env)
     env_name = env.spec.id if env.spec is not None else env.__class__.__name__
     output_folder = os.path.expanduser(args.output_folder)
 

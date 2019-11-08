@@ -14,6 +14,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_evals', type=int, default=10)
     args = parser.parse_args()
     loaded_from = args.load_from
+    print('loaded path', loaded_from)
     render_fn = (lambda *args, **kwargs: env.render()) if args.render else None
     n_evals = args.n_evals
     args = torch.load(os.path.join(loaded_from, 'args.pth.tar'))
@@ -56,7 +57,8 @@ if __name__ == "__main__":
     exp = utils.ExperienceDataset()
     exp_path = os.path.join(loaded_from, 'experience.pth.tar')
     exp.load(exp_path)
-
+    for params in exp.policy_parameters:
+        print('params shape of the policy', len(params))
     # evaluate policy
     trajectories = []
     cummulative_experience = []
@@ -80,6 +82,7 @@ if __name__ == "__main__":
                                          callback=render_fn)
             # these are the outputs of the apply_controller function
             states, actions, rewards, dones, infos = ret
+            print('states are: ', states)
             trajs.append(ret)
         trajectories.append(trajs)
         cummulative_experience.append(total_experience)
