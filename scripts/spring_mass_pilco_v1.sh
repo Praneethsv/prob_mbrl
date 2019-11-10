@@ -1,9 +1,9 @@
 #!/bin/bash
 
 python examples/deep_pilco_mm.py \
---env=Point2PointEnv-v1 \
+--env=Cartpole \
 --verbose=20 \
---port=8085 \
+--port=8080 \
 --include_current_state=true \
 --include_current_excitations=true \
 --wait_action=0.1 \

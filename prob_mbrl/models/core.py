@@ -164,6 +164,7 @@ class Regressor(torch.nn.Module):
         ''' This assumes that the newtork outputs the parameters for
             an isotropic Gaussian predictive distribution, for each
             batch sample'''
+
         if len(self.angle_dims) > 0:
             x = to_complex(x, self.angle_dims)
         # scale and center inputs
@@ -211,6 +212,7 @@ class Policy(torch.nn.Module):
                 params[k].data = v.data.clone()
 
     def forward(self, x, **kwargs):
+        # print("In models.Policy forward --- Input is: ", x)
         return_numpy = isinstance(x, np.ndarray)
         kwargs['resample'] = kwargs.get('resample', True)
         kwargs['return_samples'] = kwargs.get('return_samples', True)

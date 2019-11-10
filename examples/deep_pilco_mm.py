@@ -21,9 +21,9 @@ import artisynth_envs
 from prob_mbrl import utils, models, algorithms, envs
 from prob_mbrl.utils.utilities import extend_args
 
+
 if __name__ == '__main__':
     args = extend_args()
-    print('Arguments are: ', args)
     loaded_from = args.load_from
     if loaded_from is not None:
         args = torch.load(os.path.join(loaded_from, 'args.pth.tar'))
@@ -41,6 +41,7 @@ if __name__ == '__main__':
         env = gym.make(args.env, **vars(args))
 
     env_name = env.spec.id if env.spec is not None else env.__class__.__name__
+    # print('environment name is ', env_name)
     output_folder = os.path.expanduser(args.output_folder)
 
     results_folder = os.path.join(
@@ -71,7 +72,6 @@ if __name__ == '__main__':
         if hasattr(env.spec, 'max_episode_steps'):
             args.control_H = env.spec.max_episode_steps
             args.stop_when_done = True
-    print(type(args.control_H), type(args.n_initial_epi), args.control_H)
     initial_experience = args.control_H * args.n_initial_epi
 
     # initialize discount factor
@@ -85,13 +85,25 @@ if __name__ == '__main__':
     # initialize dynamics model
     dynE = 2 * (D + 1) if args.learn_reward else 2 * D
 
+    # print("control_H value is: ", args.control_H)
+
     if args.dyn_components > 1:
+        """
+        Mixture of Gaussian Density Network model. The components have diagonal covariance.
+        """
         output_density = models.GaussianMixtureDensity(dynE / 2,
                                                        args.dyn_components)
         dynE = (dynE + 1) * args.dyn_components + 1
     else:
+        """"
+        Rearranges the incoming dimensions to correspond to the parameters
+        of a Gaussian distribution, with diagonal covariance.
+        """
         output_density = models.DiagGaussianDensity(dynE / 2)
 
+    '''
+    Utility function for creating multilayer perceptrons of varying depth.
+    '''
     dyn_model = models.mlp(
         D + U,
         dynE,
@@ -101,11 +113,19 @@ if __name__ == '__main__':
             if args.dyn_drop_rate > 0 else None for hid in args.dyn_shape
         ],
         nonlin=torch.nn.ReLU)
+    """
+    DynamicsModel wraps around Regressor in models.core.py 
+    :returns two tensors: concatenated states and rewards, states_noise, rewards_noise
+    
+    """
     dyn = models.DynamicsModel(dyn_model,
                                reward_func=reward_func,
                                output_density=output_density).float()
 
-    # initalize policy
+    """
+    initialize policy
+    :returns: returns an mlp neural network object with weights initialized 
+    """
     pol_model = models.mlp(D,
                            2 * U,
                            args.pol_shape,
@@ -118,13 +138,18 @@ if __name__ == '__main__':
                            nonlin=torch.nn.ReLU,
                            output_nonlin=partial(models.DiagGaussianDensity,
                                                  U))
-
+    """
+    Policy network.
+    :returns: returns u (actions/policy) by taking the policy model (pol_model) 
+    """
     pol = models.Policy(pol_model, maxU, minU).float()
     print('args\n', args)
     print('Dynamics model\n', dyn)
     print('Policy\n', pol)
 
-    # initalize experience dataset
+    """
+    initalize experience dataset
+    """
     exp = utils.ExperienceDataset()
 
     if loaded_from is not None:
@@ -154,6 +179,7 @@ if __name__ == '__main__':
     # initial experience data collection
     env.seed(args.seed)
     rnd = lambda x, t: env.action_space.sample()  # noqa: E731
+
     while exp.n_samples() < initial_experience:
         ret = utils.apply_controller(
             env,
@@ -165,12 +191,18 @@ if __name__ == '__main__':
         exp.policy_parameters[-1] = copy.deepcopy(pol.state_dict())
     exp.save(results_filename)
 
-    # policy learning loop
+
+
+    """
+    policy learning loop
+    """
     expl_pol = lambda x, t: (  # noqa: E 731
             pol(x) + args.expl_noise * rnd(x, t)).clip(minU, maxU)
     render_fn = (lambda *args, **kwargs: env.render()) if args.render else None
     for ps_it in range(args.ps_iters):
-        # apply policy
+        """
+        apply policy
+        """
         new_exp = exp.n_samples() + args.control_H
         while exp.n_samples() < new_exp:
             ret = utils.apply_controller(env,
@@ -182,12 +214,22 @@ if __name__ == '__main__':
             exp.append_episode(*ret, policy_params=[])
         exp.policy_parameters[-1] = copy.deepcopy(pol.state_dict())
         exp.save(results_filename)
+        print("No of samples ", exp.n_samples())
 
-        # train dynamics
+        """
+        train dynamics
+        :returns: Returns a dataset where the inputs are state_actions and the outputs
+        are next steps.
+        """
         X, Y = exp.get_dynmodel_dataset(deltas=True,
                                         return_costs=args.learn_reward)
+        # print('state_actions and next steps', X, Y)
         dyn.set_dataset(X.to(dyn.X.device, dyn.X.dtype),
                         Y.to(dyn.X.device, dyn.X.dtype))
+        """
+        train_regressor is a function that fits/maps state_actions (X) and next steps (Y).
+        In doing so, it learns the dynamics of Environment
+        """
         utils.train_regressor(dyn,
                               args.dyn_opt_iters,
                               args.dyn_batch_size,
@@ -200,7 +242,9 @@ if __name__ == '__main__':
         torch.save(dyn.state_dict(),
                    os.path.join(results_folder, 'latest_dynamics.pth.tar'))
 
-        # sample initial states for policy optimization
+        """
+        sample initial states for policy optimization
+        """
         x0 = exp.sample_states(args.pol_batch_size,
                                timestep=0).to(dyn.X.device,
                                               dyn.X.dtype).detach()

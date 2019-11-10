@@ -38,7 +38,7 @@ class CartpoleModel(DynamicsModel):
             dt (float): Time step [s].
             mc (float): Cart mass [kg].
             mp (float): Pendulum mass [kg].
-            l (float): Pendulum length [m].
+            lp (float): Pendulum length [m].
             mu (float): Coefficient of friction [dimensionless].
             g (float): Gravity acceleration [m/s^2].
         """
@@ -134,6 +134,6 @@ class CartpoleModel(DynamicsModel):
             dz[..., 2] = theta_dot
             dz[..., 3] = theta_dot_dot
             return dz
-
+        print('In CartpoleModel (model.py) printing.....', x_dot, x_dot_dot)
         return torch.stack([x_dot, x_dot_dot, theta_dot, theta_dot_dot],
                            dim=-1)

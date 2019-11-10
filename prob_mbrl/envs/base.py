@@ -65,12 +65,14 @@ class GymEnv(gym.Env):
             x = torch.tensor(self.state)
             u = torch.tensor(action)
             x_next = self.model(x, u, 0, **kwargs)
+            print('printing x_next that is returned by CartpoleModel() ', x_next)
             self.state = x_next.detach().cpu().numpy()
         else:
             x = self.state
             u = action
             with torch.no_grad():
                 x_next = self.model(x, u, 0, **kwargs)
+                print('printing x_next with torch.no_grad() that is returned by CartpoleModel() ', x_next)
                 self.state = x_next
 
         if callable(self.reward_func):
@@ -175,7 +177,7 @@ class DynamicsModel(torch.nn.Module):
         """
         raise NotImplementedError
 
-    def forward(self, state, action, i, int_method=Integrator.DOPRI5,
+    def forward(self, state, action, i, int_method=Integrator.MIDPOINT,
                 **kwargs):
         """Dynamics model function.
 
@@ -191,14 +193,20 @@ class DynamicsModel(torch.nn.Module):
         self.action = action
         # we do numerical integration in doule precision
         if int_method == Integrator.FW_EULER:
+            state = torch.tensor(state)
             dmean = self.dynamics(state, action, i)
+            dmean = torch.tensor(dmean)
             next_state = state + dmean * self.dt
         elif int_method == Integrator.MIDPOINT:
+            state = torch.tensor(state)
             dmean = self.dynamics(state, action, i)
+            dmean = torch.tensor(dmean)
             mid = state + dmean * self.dt / 2
             dmid = self.dynamics(mid, action, i)
+            dmid = torch.tensor(dmid)
             next_state = state + dmid * self.dt
         elif int_method == Integrator.RUNGE_KUTTA:
+            state = torch.tensor(state)
             d1 = self.dynamics(state, action, i)
             d2 = self.dynamics(state + d1 * self.dt / 2, action, i)
             d3 = self.dynamics(state + d2 * self.dt / 2, action, i)
@@ -228,5 +236,5 @@ class DynamicsModel(torch.nn.Module):
             next_state = solver.y
             if isinstance(state, torch.Tensor):
                 next_state = torch.tensor(next_state).to(state.dtype)
-
+        print("In base.py.... printing in DynamicsModel.....")
         return next_state

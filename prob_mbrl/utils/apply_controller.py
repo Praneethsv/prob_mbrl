@@ -56,6 +56,7 @@ def apply_controller(env,
             u_t = u_t.flatten()
 
         # apply control and step the env
+        # print('In apply_controller actions: ', u_t)
         x_next, c_t, done, info = env.step(u_t)
         info['done'] = done
 
@@ -77,7 +78,7 @@ def apply_controller(env,
         if realtime:
             time.sleep(max(float(dt - exec_time), 0))
         t_ = time.time()
-
+        # print('Data coming from applying the controller', data)
     states, actions, costs, dones, infos = zip(*data)
 
     msg = 'Done after [%d] steps. Stopping robot.' % (t + 1)

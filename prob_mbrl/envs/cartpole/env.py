@@ -156,6 +156,7 @@ class Cartpole(GymEnv):
              **kwargs):
         state, reward, done, info = super(Cartpole,
                                           self).step(action, **kwargs)
+        # print("Observations of CartPole is: ", state)
         if self.state[0] < x_lim[0] or self.state[0] > x_lim[1]:
             done = True
         if self.state[2] < ang_lim[0] or self.state[2] > ang_lim[1]:

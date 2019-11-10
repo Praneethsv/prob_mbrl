@@ -133,7 +133,7 @@ class ExperienceDataset(torch.nn.Module):
         are next steps.
         Parameters:
         -----------
-        deltas: wheter to return changes in state
+        deltas: whether to return changes in state
                 (x_t - x_{t-1}, x_{t-1} - x_{t-2}, ...)
                 or future states
                 (x_t, x_{t-1}, x_{t-2}, ...), in the output
@@ -174,6 +174,7 @@ class ExperienceDataset(torch.nn.Module):
         for epi in filter_episodes:
             if len(self.states[epi]) == 0:
                 continue
+            # print("Inside the episode loop of experience dataset")
             # get state action pairs for current episode
             states, actions = torch.tensor(
                 self.states[epi]).double(), torch.tensor(
