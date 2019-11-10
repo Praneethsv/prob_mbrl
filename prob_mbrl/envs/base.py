@@ -177,7 +177,7 @@ class DynamicsModel(torch.nn.Module):
         """
         raise NotImplementedError
 
-    def forward(self, state, action, i, int_method=Integrator.MIDPOINT,
+    def forward(self, state, action, i, int_method=Integrator.DOPRI5,
                 **kwargs):
         """Dynamics model function.
 
